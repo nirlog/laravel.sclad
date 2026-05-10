@@ -1,13 +1,103 @@
 <?php
+
 namespace App\Services;
-use App\Models\Project;use Illuminate\Support\Facades\DB;
+
+use App\Models\Project;
+
 class CostAnalyticsService
 {
-    public function getActualPayments(Project $project,array $filters=[]): array {$p=$this->date($project->materialPurchases(),$filters)->sum('total_amount');$s=$this->date($project->serviceEntries(),$filters)->sum('total_amount');$written=$this->date($project->materialWriteOffs(),$filters)->sum('total_amount');$inventory=app(InventoryService::class)->getInventoryTable($project)->sum('stock_value');$month=now()->format('Y-m');return ['actual_total'=>(float)$p+(float)$s,'materials_purchased_total'=>(float)$p,'services_total'=>(float)$s,'materials_written_off_total'=>(float)$written,'inventory_value'=>(float)$inventory,'current_month_total'=>(float)$project->materialPurchases()->whereRaw("strftime('%Y-%m', date)=?",[$month])->sum('total_amount')+(float)$project->serviceEntries()->whereRaw("strftime('%Y-%m', date)=?",[$month])->sum('total_amount')];}
-    public function getCostByTags(Project $project,array $filters=[]): array {return DB::table('tags')->where('tags.project_id',$project->id)->leftJoin('taggables','tags.id','=','taggables.tag_id')->select('tags.id','tags.name',DB::raw('0 as actual_total'),DB::raw('0 as stage_cost_total'))->groupBy('tags.id','tags.name')->get()->toArray();}
-    public function getCostByMonths(Project $project,array $filters=[]): array {return ['purchases'=>$project->materialPurchases()->selectRaw("strftime('%Y-%m', date) month, SUM(total_amount) total")->groupBy('month')->get(),'services'=>$project->serviceEntries()->selectRaw("strftime('%Y-%m', date) month, SUM(total_amount) total")->groupBy('month')->get(),'write_offs'=>$project->materialWriteOffs()->selectRaw("strftime('%Y-%m', date) month, SUM(total_amount) total")->groupBy('month')->get()];}
-    public function getCostByContractors(Project $project,array $filters=[]): array {return $project->serviceEntries()->with('contractor')->selectRaw('contractor_id, COUNT(*) entries_count, SUM(hours) hours_total, SUM(total_amount) total_amount, SUM(paid_amount) paid_amount, SUM(total_amount-paid_amount) debt')->groupBy('contractor_id')->get()->toArray();}
-    public function getCostByMaterials(Project $project,array $filters=[]): array {return app(InventoryService::class)->getInventoryTable($project)->toArray();}
-    public function getStageCost(Project $project,array $filters=[]): array {return ['materials'=>(float)$this->date($project->materialWriteOffs(),$filters)->sum('total_amount'),'services'=>(float)$this->date($project->serviceEntries(),$filters)->sum('total_amount')];}
-    private function date($query,array $filters){return $query->when($filters['date_from']??null,fn($q,$v)=>$q->whereDate('date','>=',$v))->when($filters['date_to']??null,fn($q,$v)=>$q->whereDate('date','<=',$v));}
+    public function getActualPayments(Project $project, array $filters = []): array
+    {
+        $purchasesTotal = (float) $this->date($project->materialPurchases(), $filters)->sum('total_amount');
+        $servicesTotal = (float) $this->date($project->serviceEntries(), $filters)->sum('total_amount');
+        $writtenOffTotal = (float) $this->date($project->materialWriteOffs(), $filters)->sum('total_amount');
+        $inventoryValue = (float) app(InventoryService::class)->getInventoryTable($project)->sum('stock_value');
+        $currentMonth = now()->format('Y-m');
+
+        $currentMonthPurchases = $project->materialPurchases->filter(fn ($purchase) => $purchase->date?->format('Y-m') === $currentMonth)->sum('total_amount');
+        $currentMonthServices = $project->serviceEntries->filter(fn ($entry) => $entry->date?->format('Y-m') === $currentMonth)->sum('total_amount');
+
+        return [
+            'actual_total' => $purchasesTotal + $servicesTotal,
+            'materials_purchased_total' => $purchasesTotal,
+            'services_total' => $servicesTotal,
+            'materials_written_off_total' => $writtenOffTotal,
+            'inventory_value' => $inventoryValue,
+            'current_month_total' => (float) $currentMonthPurchases + (float) $currentMonthServices,
+        ];
+    }
+
+    public function getCostByTags(Project $project, array $filters = []): array
+    {
+        return $project->tags()->orderBy('name')->get()->map(function ($tag) use ($filters) {
+            $purchases = $this->date($tag->morphedByMany(\App\Models\MaterialPurchase::class, 'taggable'), $filters)->sum('total_amount');
+            $services = $this->date($tag->morphedByMany(\App\Models\ServiceEntry::class, 'taggable'), $filters)->sum('total_amount');
+            $writeOffs = $this->date($tag->morphedByMany(\App\Models\MaterialWriteOff::class, 'taggable'), $filters)->sum('total_amount');
+
+            return [
+                'id' => $tag->id,
+                'name' => $tag->name,
+                'actual_total' => (float) $purchases + (float) $services,
+                'stage_cost_total' => (float) $writeOffs + (float) $services,
+            ];
+        })->sortByDesc('actual_total')->values()->all();
+    }
+
+    public function getCostByMonths(Project $project, array $filters = []): array
+    {
+        return [
+            'purchases' => $this->sumByMonth($this->date($project->materialPurchases(), $filters)->get(), 'total_amount'),
+            'services' => $this->sumByMonth($this->date($project->serviceEntries(), $filters)->get(), 'total_amount'),
+            'write_offs' => $this->sumByMonth($this->date($project->materialWriteOffs(), $filters)->get(), 'total_amount'),
+        ];
+    }
+
+    public function getCostByContractors(Project $project, array $filters = []): array
+    {
+        return $this->date($project->serviceEntries()->with('contractor'), $filters)->get()
+            ->groupBy('contractor_id')
+            ->map(fn ($entries) => [
+                'contractor' => $entries->first()->contractor?->name ?? 'Без исполнителя',
+                'entries_count' => $entries->count(),
+                'hours_total' => (float) $entries->sum('hours'),
+                'total_amount' => (float) $entries->sum('total_amount'),
+                'paid_amount' => (float) $entries->sum('paid_amount'),
+                'debt' => (float) $entries->sum('total_amount') - (float) $entries->sum('paid_amount'),
+            ])->values()->all();
+    }
+
+    public function getCostByMaterials(Project $project, array $filters = []): array
+    {
+        return app(InventoryService::class)->getInventoryTable($project)->map(function (array $row) {
+            $material = $row['material'];
+
+            return $row + [
+                'purchased_amount' => (float) $material->inventoryMovements()->where('type', 'in')->sum('amount'),
+                'written_off_amount' => (float) $material->inventoryMovements()->where('type', 'out')->sum('amount'),
+            ];
+        })->values()->all();
+    }
+
+    public function getStageCost(Project $project, array $filters = []): array
+    {
+        return [
+            'materials' => (float) $this->date($project->materialWriteOffs(), $filters)->sum('total_amount'),
+            'services' => (float) $this->date($project->serviceEntries(), $filters)->sum('total_amount'),
+        ];
+    }
+
+    private function date($query, array $filters)
+    {
+        return $query
+            ->when($filters['date_from'] ?? null, fn ($query, $date) => $query->whereDate('date', '>=', $date))
+            ->when($filters['date_to'] ?? null, fn ($query, $date) => $query->whereDate('date', '<=', $date));
+    }
+
+    private function sumByMonth($items, string $field): array
+    {
+        return $items->groupBy(fn ($item) => $item->date?->format('Y-m'))->map(fn ($monthItems, $month) => [
+            'month' => $month,
+            'total' => (float) $monthItems->sum($field),
+        ])->values()->all();
+    }
 }
