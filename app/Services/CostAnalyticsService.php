@@ -12,13 +12,13 @@ class CostAnalyticsService
 {
     public function getActualPayments(Project $project, array $filters = []): array
     {
-        $purchasesTotal = (float) $this->purchaseQuery($project, $filters)->sum('total_amount');
+        $purchasesTotal = $this->purchaseTotal($project, $filters);
         $servicesTotal = (float) $this->serviceQuery($project, $filters)->sum('total_amount');
         $writtenOffTotal = (float) $this->writeOffQuery($project, $filters)->sum('total_amount');
         $inventoryValue = (float) app(InventoryService::class)->getInventoryTable($project)->sum('stock_value');
         $currentMonth = now()->format('Y-m');
 
-        $currentMonthPurchases = $this->purchaseQuery($project, [])->get()->filter(fn ($purchase) => $purchase->date?->format('Y-m') === $currentMonth)->sum('total_amount');
+        $currentMonthPurchases = $this->purchaseTotal($project, ['date_from' => now()->startOfMonth()->toDateString(), 'date_to' => now()->endOfMonth()->toDateString()] + $filters);
         $currentMonthServices = $this->serviceQuery($project, [])->get()->filter(fn ($entry) => $entry->date?->format('Y-m') === $currentMonth)->sum('total_amount');
 
         return [
@@ -35,7 +35,7 @@ class CostAnalyticsService
     {
         return $project->tags()->orderBy('name')->get()->map(function ($tag) use ($project, $filters) {
             $tagFilter = array_merge($filters, ['tag_ids' => [$tag->id]]);
-            $purchases = $this->purchaseQuery($project, $tagFilter)->sum('total_amount');
+            $purchases = $this->purchaseTotal($project, $tagFilter);
             $services = $this->serviceQuery($project, $tagFilter)->sum('total_amount');
             $writeOffs = $this->writeOffQuery($project, $tagFilter)->sum('total_amount');
 
@@ -51,7 +51,7 @@ class CostAnalyticsService
     public function getCostByMonths(Project $project, array $filters = []): array
     {
         return [
-            'purchases' => $this->sumByMonth($this->purchaseQuery($project, $filters)->get(), 'total_amount'),
+            'purchases' => $this->purchaseMonths($project, $filters),
             'services' => $this->sumByMonth($this->serviceQuery($project, $filters)->get(), 'total_amount'),
             'write_offs' => $this->sumByMonth($this->writeOffQuery($project, $filters)->get(), 'total_amount'),
         ];
@@ -93,15 +93,46 @@ class CostAnalyticsService
     }
 
 
+    private function purchaseTotal(Project $project, array $filters): float
+    {
+        if (! empty($filters['material_id'])) {
+            return $this->purchaseItemsAmount($project, (int) $filters['material_id'], $filters);
+        }
+
+        return (float) $this->purchaseQuery($project, $filters)->sum('total_amount');
+    }
+
+    private function purchaseMonths(Project $project, array $filters): array
+    {
+        if (empty($filters['material_id'])) {
+            return $this->sumByMonth($this->purchaseQuery($project, $filters)->get(), 'total_amount');
+        }
+
+        return $this->purchaseItemsQuery($project, (int) $filters['material_id'], $filters)
+            ->with('purchase')
+            ->get()
+            ->groupBy(fn (MaterialPurchaseItem $item) => $item->purchase?->date?->format('Y-m'))
+            ->map(fn ($items, $month) => [
+                'month' => $month,
+                'total' => (float) $items->sum('total_price'),
+            ])
+            ->values()
+            ->all();
+    }
+
     private function purchaseItemsAmount(Project $project, int $materialId, array $filters): float
     {
-        return (float) MaterialPurchaseItem::query()
+        return (float) $this->purchaseItemsQuery($project, $materialId, $filters)->sum('total_price');
+    }
+
+    private function purchaseItemsQuery(Project $project, int $materialId, array $filters)
+    {
+        return MaterialPurchaseItem::query()
             ->where('material_id', $materialId)
             ->whereHas('purchase', function ($query) use ($project, $filters): void {
                 $this->applyCommonFilters($query->where('project_id', $project->id), $filters)
                     ->when($filters['payment_status'] ?? null, fn ($query, $status) => $query->where('payment_status', $status));
-            })
-            ->sum('total_price');
+            });
     }
 
     private function purchaseQuery(Project $project, array $filters)

@@ -40,6 +40,22 @@ class MaterialAnalyticsTest extends TestCase
         $this->assertSame(20.0, $rows[0]['purchased_amount']);
     }
 
+
+    public function test_material_filter_limits_summary_and_monthly_purchase_totals_to_purchase_items(): void
+    {
+        [$project, $materialA, $materialB] = $this->mixedPurchaseFixture();
+        $analytics = app(CostAnalyticsService::class);
+
+        $summary = $analytics->getActualPayments($project, ['material_id' => $materialA->id]);
+        $months = $analytics->getCostByMonths($project, ['material_id' => $materialB->id]);
+
+        $this->assertSame(10.0, $summary['materials_purchased_total']);
+        $this->assertSame(10.0, $summary['actual_total']);
+        $this->assertCount(1, $months['purchases']);
+        $this->assertSame('2026-05', $months['purchases'][0]['month']);
+        $this->assertSame(20.0, $months['purchases'][0]['total']);
+    }
+
     private function mixedPurchaseFixture(): array
     {
         $user = User::factory()->create();

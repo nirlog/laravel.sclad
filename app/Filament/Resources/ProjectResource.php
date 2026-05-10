@@ -22,6 +22,7 @@ class ProjectResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
+            Select::make('user_id')->label('Владелец')->relationship('user', 'email')->searchable()->preload()->default(fn () => auth()->id())->required(),
             TextInput::make('name')->label('Название')->maxLength(255)->required(),
             TextInput::make('address')->label('Адрес')->maxLength(255),
             TextInput::make('status')->label('Статус')->maxLength(255)->required()
@@ -31,6 +32,7 @@ class ProjectResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
+            TextColumn::make('user.email')->label('Владелец')->searchable()->sortable(),
             TextColumn::make('name')->label('Название')->searchable()->sortable(),
             TextColumn::make('address')->label('Адрес')->searchable()->sortable(),
             TextColumn::make('status')->label('Статус')->searchable()->sortable()
