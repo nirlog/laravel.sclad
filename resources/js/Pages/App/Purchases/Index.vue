@@ -1,21 +1,27 @@
 <script setup>
+import { Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Card from '@/Components/App/Card.vue';
 import MoneyAmount from '@/Components/App/MoneyAmount.vue';
-defineProps({ purchases: [Object, Array], purchase: Object, totals: Object, services: Array, stock: [String, Number], averageCost: [String, Number], movements: Object });
+import { formatDate } from '@/lib/formatters';
+
+defineProps({ purchases: Object });
 </script>
+
 <template>
     <AppLayout>
         <template #title>Покупки</template>
+        <div class="mb-4 flex justify-end">
+            <Link :href="route('app.purchases.create')" class="rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white">+ Покупка</Link>
+        </div>
         <div class="space-y-3">
-            <Card v-if="purchase">
-                <h2 class="text-xl font-semibold">{ purchase.name || purchase.title || purchase.supplier_name || 'Покупки' }</h2>
-                <p class="mt-2 text-sm text-slate-500">Карточка записи. Расширенное редактирование доступно в административной панели.</p>
-            </Card>
-            <Card v-for="row in (purchases.data || purchases || [])" :key="row.id">
+            <Card v-for="purchase in purchases.data" :key="purchase.id">
                 <div class="flex justify-between gap-3">
-                    <div><h2 class="font-semibold">{ row.name || row.supplier_name || row.material?.name || row.date }</h2><p class="text-sm text-slate-500">{ row.comment || row.description }</p></div>
-                    <MoneyAmount v-if="row.total_amount" :value="row.total_amount" />
+                    <div>
+                        <Link :href="route('app.purchases.show', purchase.id)" class="font-semibold text-slate-950">{{ purchase.supplier_name || 'Покупка материалов' }}</Link>
+                        <p class="text-sm text-slate-500">{{ formatDate(purchase.date) }}</p>
+                    </div>
+                    <MoneyAmount :value="purchase.total_amount" class="font-semibold" />
                 </div>
             </Card>
         </div>

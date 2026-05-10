@@ -1,23 +1,7 @@
 <script setup>
+import { Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Card from '@/Components/App/Card.vue';
-import MoneyAmount from '@/Components/App/MoneyAmount.vue';
-defineProps({ contractors: [Object, Array], contractor: Object, totals: Object, services: Array, stock: [String, Number], averageCost: [String, Number], movements: Object });
+defineProps({ contractors: Array });
 </script>
-<template>
-    <AppLayout>
-        <template #title>Исполнители</template>
-        <div class="space-y-3">
-            <Card v-if="contractor">
-                <h2 class="text-xl font-semibold">{ contractor.name || contractor.title || contractor.supplier_name || 'Исполнители' }</h2>
-                <p class="mt-2 text-sm text-slate-500">Карточка записи. Расширенное редактирование доступно в административной панели.</p>
-            </Card>
-            <Card v-for="row in (contractors.data || contractors || [])" :key="row.id">
-                <div class="flex justify-between gap-3">
-                    <div><h2 class="font-semibold">{ row.name || row.supplier_name || row.material?.name || row.date }</h2><p class="text-sm text-slate-500">{ row.comment || row.description }</p></div>
-                    <MoneyAmount v-if="row.total_amount" :value="row.total_amount" />
-                </div>
-            </Card>
-        </div>
-    </AppLayout>
-</template>
+<template><AppLayout><template #title>Исполнители</template><div class="mb-4 flex justify-end"><Link :href="route('app.contractors.create')" class="rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white">+ Исполнитель</Link></div><div class="grid gap-3 md:grid-cols-2"><Card v-for="contractor in contractors" :key="contractor.id"><Link :href="route('app.contractors.show', contractor.id)" class="font-semibold">{{ contractor.name }}</Link><p class="text-sm text-slate-500">{{ contractor.phone || 'Телефон не указан' }}</p></Card></div></AppLayout></template>

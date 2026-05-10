@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web\App;
 
 use App\Actions\CreateServiceEntryAction;
+use App\Actions\UpdateServiceEntryAction;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Web\App\Concerns\ResolvesCurrentProject;
 use App\Http\Requests\ServiceEntryRequest;
@@ -29,15 +30,13 @@ class ServiceEntryWebController extends Controller
     {
         $project = $this->currentProject($request);
 
-        return Inertia::render('App/Services/Create', $this->sharedProjects($request, $project) + [
-            'contractors' => $project->contractors()->orderBy('name')->get(),
-            'tags' => $project->tags()->orderBy('name')->get(),
-        ]);
+        return Inertia::render('App/Services/Create', $this->formData($request, $project));
     }
 
     public function store(ServiceEntryRequest $request, CreateServiceEntryAction $action): RedirectResponse
     {
-        $entry = $action->execute($request->validated());
+        $project = $this->currentProject($request);
+        $entry = $action->execute(array_merge($request->validated(), ['project_id' => $project->id]));
 
         return redirect()->route('app.services.show', $entry)->with('success', 'Услуга сохранена. Расходы обновлены.');
     }
@@ -55,10 +54,33 @@ class ServiceEntryWebController extends Controller
     {
         $this->authorize('update', $service);
 
-        return Inertia::render('App/Services/Edit', $this->sharedProjects($request, $service->project) + [
+        return Inertia::render('App/Services/Edit', $this->formData($request, $service->project) + [
             'service' => $service->load(['contractor', 'tags']),
-            'contractors' => $service->project->contractors()->orderBy('name')->get(),
-            'tags' => $service->project->tags()->orderBy('name')->get(),
         ]);
+    }
+
+    public function update(ServiceEntryRequest $request, ServiceEntry $service, UpdateServiceEntryAction $action): RedirectResponse
+    {
+        $this->authorize('update', $service);
+        $updated = $action->execute($service, array_merge($request->validated(), ['project_id' => $service->project_id]));
+
+        return redirect()->route('app.services.show', $updated)->with('success', 'Услуга обновлена.');
+    }
+
+    public function destroy(ServiceEntry $service): RedirectResponse
+    {
+        $this->authorize('delete', $service);
+        $service->tags()->detach();
+        $service->delete();
+
+        return redirect()->route('app.services.index')->with('success', 'Услуга удалена.');
+    }
+
+    private function formData(Request $request, $project): array
+    {
+        return $this->sharedProjects($request, $project) + [
+            'contractors' => $project->contractors()->orderBy('name')->get(),
+            'tags' => $project->tags()->orderBy('name')->get(),
+        ];
     }
 }

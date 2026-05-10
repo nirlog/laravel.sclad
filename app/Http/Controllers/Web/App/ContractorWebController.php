@@ -33,13 +33,7 @@ class ContractorWebController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $project = $this->currentProject($request);
-        $contractor = $project->contractors()->create($request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'comment' => ['nullable', 'string'],
-            'is_active' => ['boolean'],
-        ]));
+        $contractor = $project->contractors()->create($request->validate($this->rules()));
 
         return redirect()->route('app.contractors.show', $contractor)->with('success', 'Исполнитель создан.');
     }
@@ -67,5 +61,32 @@ class ContractorWebController extends Controller
         return Inertia::render('App/Contractors/Edit', $this->sharedProjects($request, $contractor->project) + [
             'contractor' => $contractor,
         ]);
+    }
+
+    public function update(Request $request, Contractor $contractor): RedirectResponse
+    {
+        $this->authorize('update', $contractor);
+        $contractor->update($request->validate($this->rules()));
+
+        return redirect()->route('app.contractors.show', $contractor)->with('success', 'Исполнитель обновлён.');
+    }
+
+    public function destroy(Contractor $contractor): RedirectResponse
+    {
+        $this->authorize('delete', $contractor);
+        $contractor->delete();
+
+        return redirect()->route('app.contractors.index')->with('success', 'Исполнитель удалён.');
+    }
+
+    private function rules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'comment' => ['nullable', 'string'],
+            'is_active' => ['boolean'],
+        ];
     }
 }

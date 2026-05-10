@@ -2,20 +2,23 @@
 
 namespace App\Services;
 
+use App\Models\MaterialPurchase;
+use App\Models\MaterialWriteOff;
 use App\Models\Project;
+use App\Models\ServiceEntry;
 
 class CostAnalyticsService
 {
     public function getActualPayments(Project $project, array $filters = []): array
     {
-        $purchasesTotal = (float) $this->date($project->materialPurchases(), $filters)->sum('total_amount');
-        $servicesTotal = (float) $this->date($project->serviceEntries(), $filters)->sum('total_amount');
-        $writtenOffTotal = (float) $this->date($project->materialWriteOffs(), $filters)->sum('total_amount');
+        $purchasesTotal = (float) $this->purchaseQuery($project, $filters)->sum('total_amount');
+        $servicesTotal = (float) $this->serviceQuery($project, $filters)->sum('total_amount');
+        $writtenOffTotal = (float) $this->writeOffQuery($project, $filters)->sum('total_amount');
         $inventoryValue = (float) app(InventoryService::class)->getInventoryTable($project)->sum('stock_value');
         $currentMonth = now()->format('Y-m');
 
-        $currentMonthPurchases = $project->materialPurchases->filter(fn ($purchase) => $purchase->date?->format('Y-m') === $currentMonth)->sum('total_amount');
-        $currentMonthServices = $project->serviceEntries->filter(fn ($entry) => $entry->date?->format('Y-m') === $currentMonth)->sum('total_amount');
+        $currentMonthPurchases = $this->purchaseQuery($project, [])->get()->filter(fn ($purchase) => $purchase->date?->format('Y-m') === $currentMonth)->sum('total_amount');
+        $currentMonthServices = $this->serviceQuery($project, [])->get()->filter(fn ($entry) => $entry->date?->format('Y-m') === $currentMonth)->sum('total_amount');
 
         return [
             'actual_total' => $purchasesTotal + $servicesTotal,
@@ -29,10 +32,11 @@ class CostAnalyticsService
 
     public function getCostByTags(Project $project, array $filters = []): array
     {
-        return $project->tags()->orderBy('name')->get()->map(function ($tag) use ($filters) {
-            $purchases = $this->date($tag->morphedByMany(\App\Models\MaterialPurchase::class, 'taggable'), $filters)->sum('total_amount');
-            $services = $this->date($tag->morphedByMany(\App\Models\ServiceEntry::class, 'taggable'), $filters)->sum('total_amount');
-            $writeOffs = $this->date($tag->morphedByMany(\App\Models\MaterialWriteOff::class, 'taggable'), $filters)->sum('total_amount');
+        return $project->tags()->orderBy('name')->get()->map(function ($tag) use ($project, $filters) {
+            $tagFilter = array_merge($filters, ['tag_ids' => [$tag->id]]);
+            $purchases = $this->purchaseQuery($project, $tagFilter)->sum('total_amount');
+            $services = $this->serviceQuery($project, $tagFilter)->sum('total_amount');
+            $writeOffs = $this->writeOffQuery($project, $tagFilter)->sum('total_amount');
 
             return [
                 'id' => $tag->id,
@@ -46,15 +50,15 @@ class CostAnalyticsService
     public function getCostByMonths(Project $project, array $filters = []): array
     {
         return [
-            'purchases' => $this->sumByMonth($this->date($project->materialPurchases(), $filters)->get(), 'total_amount'),
-            'services' => $this->sumByMonth($this->date($project->serviceEntries(), $filters)->get(), 'total_amount'),
-            'write_offs' => $this->sumByMonth($this->date($project->materialWriteOffs(), $filters)->get(), 'total_amount'),
+            'purchases' => $this->sumByMonth($this->purchaseQuery($project, $filters)->get(), 'total_amount'),
+            'services' => $this->sumByMonth($this->serviceQuery($project, $filters)->get(), 'total_amount'),
+            'write_offs' => $this->sumByMonth($this->writeOffQuery($project, $filters)->get(), 'total_amount'),
         ];
     }
 
     public function getCostByContractors(Project $project, array $filters = []): array
     {
-        return $this->date($project->serviceEntries()->with('contractor'), $filters)->get()
+        return $this->serviceQuery($project, $filters)->with('contractor')->get()
             ->groupBy('contractor_id')
             ->map(fn ($entries) => [
                 'contractor' => $entries->first()->contractor?->name ?? 'Без исполнителя',
@@ -68,12 +72,13 @@ class CostAnalyticsService
 
     public function getCostByMaterials(Project $project, array $filters = []): array
     {
-        return app(InventoryService::class)->getInventoryTable($project)->map(function (array $row) {
+        return app(InventoryService::class)->getInventoryTable($project)->map(function (array $row) use ($project, $filters) {
             $material = $row['material'];
+            $materialFilters = array_merge($filters, ['material_id' => $material->id]);
 
             return $row + [
-                'purchased_amount' => (float) $material->inventoryMovements()->where('type', 'in')->sum('amount'),
-                'written_off_amount' => (float) $material->inventoryMovements()->where('type', 'out')->sum('amount'),
+                'purchased_amount' => (float) $this->purchaseQuery($project, $materialFilters)->sum('total_amount'),
+                'written_off_amount' => (float) $this->writeOffQuery($project, $materialFilters)->sum('total_amount'),
             ];
         })->values()->all();
     }
@@ -81,16 +86,37 @@ class CostAnalyticsService
     public function getStageCost(Project $project, array $filters = []): array
     {
         return [
-            'materials' => (float) $this->date($project->materialWriteOffs(), $filters)->sum('total_amount'),
-            'services' => (float) $this->date($project->serviceEntries(), $filters)->sum('total_amount'),
+            'materials' => (float) $this->writeOffQuery($project, $filters)->sum('total_amount'),
+            'services' => (float) $this->serviceQuery($project, $filters)->sum('total_amount'),
         ];
     }
 
-    private function date($query, array $filters)
+    private function purchaseQuery(Project $project, array $filters)
+    {
+        return $this->applyCommonFilters($project->materialPurchases(), $filters)
+            ->when($filters['payment_status'] ?? null, fn ($query, $status) => $query->where('payment_status', $status))
+            ->when($filters['material_id'] ?? null, fn ($query, $materialId) => $query->whereHas('items', fn ($itemQuery) => $itemQuery->where('material_id', $materialId)));
+    }
+
+    private function writeOffQuery(Project $project, array $filters)
+    {
+        return $this->applyCommonFilters($project->materialWriteOffs(), $filters)
+            ->when($filters['material_id'] ?? null, fn ($query, $materialId) => $query->where('material_id', $materialId));
+    }
+
+    private function serviceQuery(Project $project, array $filters)
+    {
+        return $this->applyCommonFilters($project->serviceEntries(), $filters)
+            ->when($filters['payment_status'] ?? null, fn ($query, $status) => $query->where('payment_status', $status))
+            ->when($filters['contractor_id'] ?? null, fn ($query, $contractorId) => $query->where('contractor_id', $contractorId));
+    }
+
+    private function applyCommonFilters($query, array $filters)
     {
         return $query
             ->when($filters['date_from'] ?? null, fn ($query, $date) => $query->whereDate('date', '>=', $date))
-            ->when($filters['date_to'] ?? null, fn ($query, $date) => $query->whereDate('date', '<=', $date));
+            ->when($filters['date_to'] ?? null, fn ($query, $date) => $query->whereDate('date', '<=', $date))
+            ->when($filters['tag_ids'] ?? null, fn ($query, $tagIds) => $query->whereHas('tags', fn ($tagQuery) => $tagQuery->whereIn('tags.id', (array) $tagIds)));
     }
 
     private function sumByMonth($items, string $field): array

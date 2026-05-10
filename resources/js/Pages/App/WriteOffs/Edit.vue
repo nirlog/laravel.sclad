@@ -1,23 +1,17 @@
 <script setup>
+import { computed } from 'vue';
+import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Card from '@/Components/App/Card.vue';
-import MoneyAmount from '@/Components/App/MoneyAmount.vue';
-defineProps({ writeOff: [Object, Array], None: Object, totals: Object, services: Array, stock: [String, Number], averageCost: [String, Number], movements: Object });
+import TagSelector from '@/Components/App/TagSelector.vue';
+
+const props = defineProps({ writeOff: Object, materials: Array, tags: Array });
+const form = useForm({ project_id: props.writeOff.project_id, date: props.writeOff.date, material_id: props.writeOff.material_id, quantity: props.writeOff.quantity, tag_ids: props.writeOff.tags?.map((tag) => tag.id) || [], comment: props.writeOff.comment || '' });
+const material = computed(() => props.materials.find((item) => item.id === Number(form.material_id)));
+const exceedsStock = computed(() => material.value && Number(form.quantity || 0) > Number(material.value.current_stock || 0) + Number(props.writeOff.quantity || 0));
+function submit() { if (!exceedsStock.value) form.patch(route('app.write-offs.update', props.writeOff.id)); }
 </script>
+
 <template>
-    <AppLayout>
-        <template #title>Редактировать списание</template>
-        <div class="space-y-3">
-            <Card v-if="None">
-                <h2 class="text-xl font-semibold">{ None.name || None.title || None.supplier_name || 'Редактировать списание' }</h2>
-                <p class="mt-2 text-sm text-slate-500">Карточка записи. Расширенное редактирование доступно в административной панели.</p>
-            </Card>
-            <Card v-for="row in (writeOff.data || writeOff || [])" :key="row.id">
-                <div class="flex justify-between gap-3">
-                    <div><h2 class="font-semibold">{ row.name || row.supplier_name || row.material?.name || row.date }</h2><p class="text-sm text-slate-500">{ row.comment || row.description }</p></div>
-                    <MoneyAmount v-if="row.total_amount" :value="row.total_amount" />
-                </div>
-            </Card>
-        </div>
-    </AppLayout>
+    <AppLayout><template #title>Редактировать списание</template><form class="space-y-4" @submit.prevent="submit"><Card class="grid gap-4 md:grid-cols-2"><input v-model="form.date" type="date" class="rounded-xl border-slate-300" /><select v-model="form.material_id" class="rounded-xl border-slate-300"><option v-for="item in materials" :key="item.id" :value="item.id">{{ item.name }}</option></select><div class="rounded-xl bg-slate-50 p-4">Доступно: <b>{{ material?.current_stock ?? '—' }} {{ material?.unit?.short_name }}</b></div><input v-model="form.quantity" type="number" step="0.001" min="0.001" class="rounded-xl border-slate-300" /><div class="md:col-span-2"><TagSelector v-model="form.tag_ids" :tags="tags" /></div><textarea v-model="form.comment" class="rounded-xl border-slate-300 md:col-span-2" /><p v-if="exceedsStock" class="rounded-xl bg-rose-50 p-3 text-sm text-rose-700 md:col-span-2">Недостаточно материала на складе.</p></Card><button class="w-full rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white disabled:opacity-50" :disabled="exceedsStock">Сохранить</button></form></AppLayout>
 </template>

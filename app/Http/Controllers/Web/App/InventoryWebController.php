@@ -46,7 +46,7 @@ class InventoryWebController extends Controller
             'comment' => ['nullable', 'string'],
         ]);
 
-        $action->execute($data + ['project_id' => $project->id, 'type' => 'adjustment']);
+        $action->execute(array_merge($data, ['project_id' => $project->id, 'type' => 'adjustment']));
 
         return redirect()->route('app.inventory.index')->with('success', 'Корректировка склада сохранена.');
     }

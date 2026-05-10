@@ -1,23 +1,14 @@
 <script setup>
+import { computed } from 'vue';
+import { useForm } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Card from '@/Components/App/Card.vue';
-import MoneyAmount from '@/Components/App/MoneyAmount.vue';
-defineProps({ service: [Object, Array], None: Object, totals: Object, services: Array, stock: [String, Number], averageCost: [String, Number], movements: Object });
+import TagSelector from '@/Components/App/TagSelector.vue';
+import { formatMoney } from '@/lib/formatters';
+
+const props = defineProps({ service: Object, contractors: Array, tags: Array });
+const form = useForm({ project_id: props.service.project_id, contractor_id: props.service.contractor_id || '', date: props.service.date, name: props.service.name, pricing_type: props.service.pricing_type, hours: props.service.hours, hourly_rate: props.service.hourly_rate, quantity: props.service.quantity, unit_name: props.service.unit_name || '', unit_price: props.service.unit_price, total_amount: props.service.total_amount, payment_status: props.service.payment_status, paid_amount: props.service.paid_amount, tag_ids: props.service.tags?.map((tag) => tag.id) || [], comment: props.service.comment || '' });
+const previewTotal = computed(() => form.pricing_type === 'hourly' ? Number(form.hours || 0) * Number(form.hourly_rate || 0) : form.pricing_type === 'unit' ? Number(form.quantity || 0) * Number(form.unit_price || 0) : Number(form.total_amount || 0));
+function submit() { form.patch(route('app.services.update', props.service.id)); }
 </script>
-<template>
-    <AppLayout>
-        <template #title>Редактировать услугу</template>
-        <div class="space-y-3">
-            <Card v-if="None">
-                <h2 class="text-xl font-semibold">{ None.name || None.title || None.supplier_name || 'Редактировать услугу' }</h2>
-                <p class="mt-2 text-sm text-slate-500">Карточка записи. Расширенное редактирование доступно в административной панели.</p>
-            </Card>
-            <Card v-for="row in (service.data || service || [])" :key="row.id">
-                <div class="flex justify-between gap-3">
-                    <div><h2 class="font-semibold">{ row.name || row.supplier_name || row.material?.name || row.date }</h2><p class="text-sm text-slate-500">{ row.comment || row.description }</p></div>
-                    <MoneyAmount v-if="row.total_amount" :value="row.total_amount" />
-                </div>
-            </Card>
-        </div>
-    </AppLayout>
-</template>
+<template><AppLayout><template #title>Редактировать услугу</template><form class="space-y-4" @submit.prevent="submit"><Card class="grid gap-4 md:grid-cols-2"><input v-model="form.date" type="date" class="rounded-xl border-slate-300" /><input v-model="form.name" class="rounded-xl border-slate-300" /><select v-model="form.contractor_id" class="rounded-xl border-slate-300"><option value="">Исполнитель</option><option v-for="contractor in contractors" :key="contractor.id" :value="contractor.id">{{ contractor.name }}</option></select><select v-model="form.pricing_type" class="rounded-xl border-slate-300"><option value="fixed">Фиксированная сумма</option><option value="hourly">По часам</option><option value="unit">По количеству</option></select><template v-if="form.pricing_type === 'hourly'"><input v-model="form.hours" type="number" step="0.01" class="rounded-xl border-slate-300" /><input v-model="form.hourly_rate" type="number" step="0.01" class="rounded-xl border-slate-300" /></template><template v-if="form.pricing_type === 'unit'"><input v-model="form.quantity" type="number" step="0.001" class="rounded-xl border-slate-300" /><input v-model="form.unit_name" class="rounded-xl border-slate-300" /><input v-model="form.unit_price" type="number" step="0.01" class="rounded-xl border-slate-300" /></template><input v-if="form.pricing_type === 'fixed'" v-model="form.total_amount" type="number" step="0.01" class="rounded-xl border-slate-300" /><select v-model="form.payment_status" class="rounded-xl border-slate-300"><option value="paid">Оплачено</option><option value="partial">Частично</option><option value="unpaid">Не оплачено</option></select><input v-model="form.paid_amount" type="number" step="0.01" class="rounded-xl border-slate-300" /><div class="md:col-span-2"><TagSelector v-model="form.tag_ids" :tags="tags" /></div><textarea v-model="form.comment" class="rounded-xl border-slate-300 md:col-span-2" /></Card><button class="w-full rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white">Сохранить {{ formatMoney(previewTotal) }}</button></form></AppLayout></template>

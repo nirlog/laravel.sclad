@@ -50,7 +50,7 @@ class OperationService
 
     private function purchases(Project $project, array $filters): Collection
     {
-        return $this->applyDates($project->materialPurchases()->with(['items.material.unit', 'tags']), $filters)
+        return $this->applyOperationFilters($this->applyDates($project->materialPurchases()->with(['items.material.unit', 'tags']), $filters), $filters, 'purchase')
             ->get()
             ->map(fn (MaterialPurchase $purchase) => [
                 'id' => 'purchase:'.$purchase->id,
@@ -69,7 +69,7 @@ class OperationService
 
     private function writeOffs(Project $project, array $filters): Collection
     {
-        return $this->applyDates($project->materialWriteOffs()->with(['material.unit', 'tags']), $filters)
+        return $this->applyOperationFilters($this->applyDates($project->materialWriteOffs()->with(['material.unit', 'tags']), $filters), $filters, 'write_off')
             ->get()
             ->map(fn (MaterialWriteOff $writeOff) => [
                 'id' => 'write_off:'.$writeOff->id,
@@ -88,8 +88,7 @@ class OperationService
 
     private function services(Project $project, array $filters): Collection
     {
-        return $this->applyDates($project->serviceEntries()->with(['contractor', 'tags']), $filters)
-            ->when($filters['contractor_id'] ?? null, fn ($query, $id) => $query->where('contractor_id', $id))
+        return $this->applyOperationFilters($this->applyDates($project->serviceEntries()->with(['contractor', 'tags']), $filters), $filters, 'service')
             ->get()
             ->map(fn (ServiceEntry $entry) => [
                 'id' => 'service:'.$entry->id,
@@ -108,7 +107,7 @@ class OperationService
 
     private function adjustments(Project $project, array $filters): Collection
     {
-        return $this->applyDates($project->inventoryMovements()->with(['material.unit', 'tags'])->where('type', 'adjustment'), $filters)
+        return $this->applyOperationFilters($this->applyDates($project->inventoryMovements()->with(['material.unit', 'tags'])->where('type', 'adjustment'), $filters), $filters, 'adjustment')
             ->get()
             ->map(fn (InventoryMovement $movement) => [
                 'id' => 'adjustment:'.$movement->id,
@@ -123,6 +122,17 @@ class OperationService
                 'url' => route('app.inventory.index'),
                 'comment' => $movement->comment,
             ]);
+    }
+
+    private function applyOperationFilters($query, array $filters, string $operationType)
+    {
+        return $query
+            ->when($filters['tag_ids'] ?? null, fn ($query, $tagIds) => $query->whereHas('tags', fn ($tagQuery) => $tagQuery->whereIn('tags.id', (array) $tagIds)))
+            ->when(($filters['material_id'] ?? null) && $operationType === 'purchase', fn ($query) => $query->whereHas('items', fn ($itemQuery) => $itemQuery->where('material_id', $filters['material_id'])))
+            ->when(($filters['material_id'] ?? null) && in_array($operationType, ['write_off', 'adjustment'], true), fn ($query) => $query->where('material_id', $filters['material_id']))
+            ->when(($filters['contractor_id'] ?? null) && $operationType === 'service', fn ($query) => $query->where('contractor_id', $filters['contractor_id']))
+            ->when($filters['amount_from'] ?? null, fn ($query, $amount) => $query->where($operationType === 'adjustment' ? 'amount' : 'total_amount', '>=', $amount))
+            ->when($filters['amount_to'] ?? null, fn ($query, $amount) => $query->where($operationType === 'adjustment' ? 'amount' : 'total_amount', '<=', $amount));
     }
 
     private function applyDates($query, array $filters)
