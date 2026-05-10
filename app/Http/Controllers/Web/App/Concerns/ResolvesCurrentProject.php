@@ -9,13 +9,36 @@ trait ResolvesCurrentProject
 {
     protected function currentProject(Request $request): Project
     {
-        $query = $request->user()->projects()->where('status', 'active');
+        $projects = $request->user()->projects()->where('status', 'active');
 
         if ($request->filled('project_id')) {
-            $query->whereKey($request->integer('project_id'));
+            $project = (clone $projects)->whereKey($request->integer('project_id'))->first();
+
+            if ($project) {
+                $request->session()->put('current_project_id', $project->id);
+
+                return $project;
+            }
+
+            $request->session()->forget('current_project_id');
         }
 
-        return $query->firstOrFail();
+        $sessionProjectId = $request->session()->get('current_project_id');
+
+        if ($sessionProjectId) {
+            $project = (clone $projects)->whereKey($sessionProjectId)->first();
+
+            if ($project) {
+                return $project;
+            }
+
+            $request->session()->forget('current_project_id');
+        }
+
+        $project = $projects->firstOrFail();
+        $request->session()->put('current_project_id', $project->id);
+
+        return $project;
     }
 
     protected function sharedProjects(Request $request, Project $project): array

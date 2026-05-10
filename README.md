@@ -31,6 +31,33 @@ php artisan serve
 - email: `demo@example.com`
 - password: `password`
 
+## Запуск через Docker
+
+Docker-конфигурация — альтернативный способ локального запуска на Windows, Linux и macOS. SQLite quickstart выше остаётся доступным для запуска без контейнеров.
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan migrate:fresh --seed
+docker compose run --rm node npm install
+docker compose run --rm node npm run build
+```
+
+Для Vite dev server можно использовать:
+
+```bash
+docker compose run --rm --service-ports node npm run dev
+```
+
+Адреса после запуска:
+
+- приложение: <http://localhost:8080>
+- admin: <http://localhost:8080/admin>
+- demo login: `demo@example.com` / `password`
+
+По умолчанию compose передаёт контейнеру Laravel MySQL-настройки `DB_HOST=db`, `DB_DATABASE=construction_ledger`, `DB_USERNAME=construction`, `DB_PASSWORD=secret`, а также `SESSION_DRIVER=database`, `CACHE_STORE=database` и `QUEUE_CONNECTION=database`. Автоматические миграции в entrypoint отключены; если нужно запускать их при старте app-контейнера, задайте `RUN_MIGRATIONS=true`.
+
 ## Проверки
 
 ```bash

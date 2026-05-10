@@ -6,6 +6,7 @@ use App\Actions\Concerns\ValidatesProjectScope;
 use App\Models\InventoryMovement;
 use App\Models\MaterialWriteOff;
 use App\Services\InventoryService;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -40,7 +41,7 @@ class UpdateMaterialWriteOffAction
                 throw new RuntimeException('Недостаточно материала на складе для обновления списания.');
             }
 
-            $unit = $this->inventory->getAverageUnitCost($project, $material);
+            $unit = $this->inventory->getAverageUnitCost($project, $material, Carbon::parse($data['date']));
             $total = round((float) $data['quantity'] * $unit, 2);
             unset($data['tag_ids']);
 

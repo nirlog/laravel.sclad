@@ -7,6 +7,7 @@ use App\Models\InventoryMovement;
 use App\Models\MaterialWriteOff;
 use App\Models\Project;
 use App\Services\InventoryService;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -32,7 +33,7 @@ class CreateMaterialWriteOffAction
             $this->assertTagsBelongToProject($project, $tagIds);
             $this->inventory->assertCanWriteOff($project, $material, (float) $data['quantity']);
 
-            $unit = $this->inventory->getAverageUnitCost($project, $material);
+            $unit = $this->inventory->getAverageUnitCost($project, $material, Carbon::parse($data['date']));
             $total = round((float) $data['quantity'] * $unit, 2);
             unset($data['tag_ids']);
             $data['project_id'] = $project->id;
