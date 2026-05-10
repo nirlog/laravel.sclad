@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\MaterialPurchase;
+use App\Models\MaterialPurchaseItem;
 use App\Models\MaterialWriteOff;
 use App\Models\Project;
 use App\Models\ServiceEntry;
@@ -72,12 +73,12 @@ class CostAnalyticsService
 
     public function getCostByMaterials(Project $project, array $filters = []): array
     {
-        return app(InventoryService::class)->getInventoryTable($project)->map(function (array $row) use ($project, $filters) {
+        return app(InventoryService::class)->getInventoryTable($project, $filters)->map(function (array $row) use ($project, $filters) {
             $material = $row['material'];
             $materialFilters = array_merge($filters, ['material_id' => $material->id]);
 
             return $row + [
-                'purchased_amount' => (float) $this->purchaseQuery($project, $materialFilters)->sum('total_amount'),
+                'purchased_amount' => (float) $this->purchaseItemsAmount($project, $material->id, $filters),
                 'written_off_amount' => (float) $this->writeOffQuery($project, $materialFilters)->sum('total_amount'),
             ];
         })->values()->all();
@@ -89,6 +90,18 @@ class CostAnalyticsService
             'materials' => (float) $this->writeOffQuery($project, $filters)->sum('total_amount'),
             'services' => (float) $this->serviceQuery($project, $filters)->sum('total_amount'),
         ];
+    }
+
+
+    private function purchaseItemsAmount(Project $project, int $materialId, array $filters): float
+    {
+        return (float) MaterialPurchaseItem::query()
+            ->where('material_id', $materialId)
+            ->whereHas('purchase', function ($query) use ($project, $filters): void {
+                $this->applyCommonFilters($query->where('project_id', $project->id), $filters)
+                    ->when($filters['payment_status'] ?? null, fn ($query, $status) => $query->where('payment_status', $status));
+            })
+            ->sum('total_price');
     }
 
     private function purchaseQuery(Project $project, array $filters)
