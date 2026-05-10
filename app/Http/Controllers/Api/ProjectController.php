@@ -1,0 +1,4 @@
+<?php
+namespace App\Http\Controllers\Api;
+use App\Models\Project;use Illuminate\Http\Request;use App\Http\Controllers\Controller;
+class ProjectController extends Controller{public function index(Request $r){return $r->user()->projects;} public function store(Request $r){return $r->user()->projects()->create($r->validate(['name'=>'required|string','address'=>'nullable|string','description'=>'nullable|string','status'=>'nullable|in:active,archived','started_at'=>'nullable|date','finished_at'=>'nullable|date']));} public function show(Project $project){$this->authorize('view',$project);return $project;} public function update(Request $r,Project $project){$this->authorize('update',$project);$project->update($r->only(['name','address','description','status','started_at','finished_at']));return $project;} public function destroy(Project $project){$this->authorize('delete',$project);$project->delete();return response()->noContent();}}
