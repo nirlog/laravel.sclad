@@ -15,29 +15,31 @@ use Filament\Tables\Table;
 class InventoryMovementResource extends Resource
 {
     protected static ?string $model = InventoryMovement::class;
-    protected static ?string $navigationLabel = 'InventoryMovement';
+    protected static ?string $navigationLabel = 'Движения склада';
+    protected static ?string $modelLabel = 'Движения склада';
+    protected static ?string $pluralModelLabel = 'Движения склада';
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-                Select::make('project_id')->numeric()->required(),
-                Select::make('material_id')->numeric()->required(),
-                DatePicker::make('date')->required(),
-                TextInput::make('type')->maxLength(255),
-                TextInput::make('quantity')->numeric(),
-                TextInput::make('amount')->numeric()
+            Select::make('project_id')->label('Проект')->relationship('project', 'name')->searchable()->preload()->required(),
+            Select::make('material_id')->label('Материал')->relationship('material', 'name')->searchable()->preload()->required(),
+            DatePicker::make('date')->label('Дата')->required(),
+            TextInput::make('type')->label('Тип')->maxLength(255),
+            TextInput::make('quantity')->label('Количество')->numeric(),
+            TextInput::make('amount')->label('Сумма')->numeric()
         ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table->columns([
-                TextColumn::make('project_id')->searchable()->sortable(),
-                TextColumn::make('material_id')->searchable()->sortable(),
-                TextColumn::make('date')->searchable()->sortable(),
-                TextColumn::make('type')->searchable()->sortable(),
-                TextColumn::make('quantity')->searchable()->sortable(),
-                TextColumn::make('amount')->searchable()->sortable()
+            TextColumn::make('project.name')->label('Проект')->searchable()->sortable(),
+            TextColumn::make('material.name')->label('Материал')->searchable()->sortable(),
+            TextColumn::make('date')->label('Дата')->date('d.m.Y')->sortable(),
+            TextColumn::make('type')->label('Тип')->searchable()->sortable(),
+            TextColumn::make('quantity')->label('Количество')->numeric()->sortable(),
+            TextColumn::make('amount')->label('Сумма')->numeric()->sortable()
         ]);
     }
 

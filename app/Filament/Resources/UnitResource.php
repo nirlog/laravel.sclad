@@ -15,21 +15,23 @@ use Filament\Tables\Table;
 class UnitResource extends Resource
 {
     protected static ?string $model = Unit::class;
-    protected static ?string $navigationLabel = 'Unit';
+    protected static ?string $navigationLabel = 'Единицы измерения';
+    protected static ?string $modelLabel = 'Единицы измерения';
+    protected static ?string $pluralModelLabel = 'Единицы измерения';
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-                TextInput::make('name')->maxLength(255),
-                TextInput::make('short_name')->maxLength(255)
+            TextInput::make('name')->label('Название')->maxLength(255)->required(),
+            TextInput::make('short_name')->label('Кратко')->maxLength(255)->required()
         ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table->columns([
-                TextColumn::make('name')->searchable()->sortable(),
-                TextColumn::make('short_name')->searchable()->sortable()
+            TextColumn::make('name')->label('Название')->searchable()->sortable(),
+            TextColumn::make('short_name')->label('Кратко')->searchable()->sortable()
         ]);
     }
 

@@ -9,9 +9,12 @@ class MaterialWriteOffRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $project = $this->route('project');
+        $writeOff = $this->route('writeOff');
 
         if ($project) {
             $this->merge(['project_id' => is_object($project) ? $project->getKey() : $project]);
+        } elseif ($writeOff) {
+            $this->merge(['project_id' => $writeOff->project_id]);
         }
     }
 

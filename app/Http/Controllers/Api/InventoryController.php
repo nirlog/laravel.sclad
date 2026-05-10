@@ -10,11 +10,11 @@ use Illuminate\Http\Request;
 
 class InventoryController extends Controller
 {
-    public function index(Project $project, InventoryService $service)
+    public function index(Request $request, Project $project, InventoryService $service)
     {
         $this->authorize('view', $project);
 
-        return $service->getInventoryTable($project);
+        return $service->getInventoryTable($project, $request->all());
     }
 
     public function movements(Project $project)

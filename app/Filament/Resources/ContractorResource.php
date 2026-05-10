@@ -15,25 +15,27 @@ use Filament\Tables\Table;
 class ContractorResource extends Resource
 {
     protected static ?string $model = Contractor::class;
-    protected static ?string $navigationLabel = 'Contractor';
+    protected static ?string $navigationLabel = 'Исполнители';
+    protected static ?string $modelLabel = 'Исполнители';
+    protected static ?string $pluralModelLabel = 'Исполнители';
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-                Select::make('project_id')->numeric()->required(),
-                TextInput::make('name')->maxLength(255),
-                TextInput::make('phone')->maxLength(255),
-                TextInput::make('email')->maxLength(255)
+            Select::make('project_id')->label('Проект')->relationship('project', 'name')->searchable()->preload()->required(),
+            TextInput::make('name')->label('Имя')->maxLength(255)->required(),
+            TextInput::make('phone')->label('Телефон')->maxLength(255),
+            TextInput::make('email')->label('Email')->maxLength(255)
         ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table->columns([
-                TextColumn::make('project_id')->searchable()->sortable(),
-                TextColumn::make('name')->searchable()->sortable(),
-                TextColumn::make('phone')->searchable()->sortable(),
-                TextColumn::make('email')->searchable()->sortable()
+            TextColumn::make('project.name')->label('Проект')->searchable()->sortable(),
+            TextColumn::make('name')->label('Имя')->searchable()->sortable(),
+            TextColumn::make('phone')->label('Телефон')->searchable()->sortable(),
+            TextColumn::make('email')->label('Email')->searchable()->sortable()
         ]);
     }
 

@@ -15,23 +15,25 @@ use Filament\Tables\Table;
 class ProjectResource extends Resource
 {
     protected static ?string $model = Project::class;
-    protected static ?string $navigationLabel = 'Project';
+    protected static ?string $navigationLabel = 'Проекты';
+    protected static ?string $modelLabel = 'Проекты';
+    protected static ?string $pluralModelLabel = 'Проекты';
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-                TextInput::make('name')->maxLength(255),
-                TextInput::make('address')->maxLength(255),
-                TextInput::make('status')->maxLength(255)
+            TextInput::make('name')->label('Название')->maxLength(255)->required(),
+            TextInput::make('address')->label('Адрес')->maxLength(255),
+            TextInput::make('status')->label('Статус')->maxLength(255)->required()
         ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table->columns([
-                TextColumn::make('name')->searchable()->sortable(),
-                TextColumn::make('address')->searchable()->sortable(),
-                TextColumn::make('status')->searchable()->sortable()
+            TextColumn::make('name')->label('Название')->searchable()->sortable(),
+            TextColumn::make('address')->label('Адрес')->searchable()->sortable(),
+            TextColumn::make('status')->label('Статус')->searchable()->sortable()
         ]);
     }
 

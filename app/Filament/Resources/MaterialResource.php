@@ -15,25 +15,27 @@ use Filament\Tables\Table;
 class MaterialResource extends Resource
 {
     protected static ?string $model = Material::class;
-    protected static ?string $navigationLabel = 'Material';
+    protected static ?string $navigationLabel = 'Материалы';
+    protected static ?string $modelLabel = 'Материалы';
+    protected static ?string $pluralModelLabel = 'Материалы';
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-                Select::make('project_id')->numeric()->required(),
-                Select::make('unit_id')->numeric()->required(),
-                TextInput::make('name')->maxLength(255),
-                TextInput::make('sku')->maxLength(255)
+            Select::make('project_id')->label('Проект')->relationship('project', 'name')->searchable()->preload()->required(),
+            Select::make('unit_id')->label('Единица')->relationship('unit', 'short_name')->searchable()->preload()->required(),
+            TextInput::make('name')->label('Название')->maxLength(255)->required(),
+            TextInput::make('sku')->label('Артикул')->maxLength(255)
         ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table->columns([
-                TextColumn::make('project_id')->searchable()->sortable(),
-                TextColumn::make('unit_id')->searchable()->sortable(),
-                TextColumn::make('name')->searchable()->sortable(),
-                TextColumn::make('sku')->searchable()->sortable()
+            TextColumn::make('project.name')->label('Проект')->searchable()->sortable(),
+            TextColumn::make('unit.short_name')->label('Единица')->searchable()->sortable(),
+            TextColumn::make('name')->label('Название')->searchable()->sortable(),
+            TextColumn::make('sku')->label('Артикул')->searchable()->sortable()
         ]);
     }
 

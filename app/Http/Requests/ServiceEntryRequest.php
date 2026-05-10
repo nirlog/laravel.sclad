@@ -9,9 +9,12 @@ class ServiceEntryRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $project = $this->route('project');
+        $serviceEntry = $this->route('serviceEntry') ?: $this->route('service') ?: $this->route('service_entry');
 
         if ($project) {
             $this->merge(['project_id' => is_object($project) ? $project->getKey() : $project]);
+        } elseif ($serviceEntry) {
+            $this->merge(['project_id' => $serviceEntry->project_id]);
         }
     }
 

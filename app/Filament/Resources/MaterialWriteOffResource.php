@@ -15,27 +15,29 @@ use Filament\Tables\Table;
 class MaterialWriteOffResource extends Resource
 {
     protected static ?string $model = MaterialWriteOff::class;
-    protected static ?string $navigationLabel = 'MaterialWriteOff';
+    protected static ?string $navigationLabel = 'Списания материалов';
+    protected static ?string $modelLabel = 'Списания материалов';
+    protected static ?string $pluralModelLabel = 'Списания материалов';
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-                Select::make('project_id')->numeric()->required(),
-                Select::make('material_id')->numeric()->required(),
-                DatePicker::make('date')->required(),
-                TextInput::make('quantity')->numeric(),
-                TextInput::make('total_amount')->numeric()
+            Select::make('project_id')->label('Проект')->relationship('project', 'name')->searchable()->preload()->required(),
+            Select::make('material_id')->label('Материал')->relationship('material', 'name')->searchable()->preload()->required(),
+            DatePicker::make('date')->label('Дата')->required(),
+            TextInput::make('quantity')->label('Количество')->numeric(),
+            TextInput::make('total_amount')->label('Сумма')->numeric()
         ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table->columns([
-                TextColumn::make('project_id')->searchable()->sortable(),
-                TextColumn::make('material_id')->searchable()->sortable(),
-                TextColumn::make('date')->searchable()->sortable(),
-                TextColumn::make('quantity')->searchable()->sortable(),
-                TextColumn::make('total_amount')->searchable()->sortable()
+            TextColumn::make('project.name')->label('Проект')->searchable()->sortable(),
+            TextColumn::make('material.name')->label('Материал')->searchable()->sortable(),
+            TextColumn::make('date')->label('Дата')->date('d.m.Y')->sortable(),
+            TextColumn::make('quantity')->label('Количество')->numeric()->sortable(),
+            TextColumn::make('total_amount')->label('Сумма')->numeric()->sortable()
         ]);
     }
 

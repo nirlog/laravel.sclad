@@ -9,9 +9,12 @@ class MaterialPurchaseRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $project = $this->route('project');
+        $purchase = $this->route('purchase');
 
         if ($project) {
             $this->merge(['project_id' => is_object($project) ? $project->getKey() : $project]);
+        } elseif ($purchase) {
+            $this->merge(['project_id' => $purchase->project_id]);
         }
     }
 
