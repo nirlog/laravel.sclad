@@ -41,6 +41,47 @@ class PurchaseInventorySafetyTest extends TestCase
         app(UpdateMaterialPurchaseAction::class)->execute($purchase, $this->purchasePayload($project, $material, 5));
     }
 
+    public function test_cannot_move_purchase_after_existing_write_off_even_when_current_stock_stays_positive(): void
+    {
+        [$project, $material] = $this->fixture();
+        $earlyPurchase = $this->purchase($project, $material, 10, '2026-01-01');
+        $this->writeOff($project, $material, 8, '2026-01-10');
+        $this->purchase($project, $material, 10, '2026-01-20');
+
+        $this->expectException(RuntimeException::class);
+
+        try {
+            app(UpdateMaterialPurchaseAction::class)->execute(
+                $earlyPurchase,
+                $this->purchasePayload($project, $material, 10, '2026-01-15'),
+            );
+        } finally {
+            $this->assertDatabaseHas('material_purchases', [
+                'id' => $earlyPurchase->id,
+                'date' => '2026-01-01',
+            ]);
+            $this->assertSame(2.0, app(InventoryService::class)->getStockAsOf($project, $material, '2026-01-10'));
+        }
+    }
+
+    public function test_cannot_delete_early_purchase_when_intermediate_write_off_would_become_uncovered(): void
+    {
+        [$project, $material] = $this->fixture();
+        $earlyPurchase = $this->purchase($project, $material, 10, '2026-01-01');
+        $this->writeOff($project, $material, 8, '2026-01-10');
+        $this->purchase($project, $material, 10, '2026-01-20');
+
+        $this->expectException(RuntimeException::class);
+
+        try {
+            app(DeleteMaterialPurchaseAction::class)->execute($earlyPurchase);
+        } finally {
+            $this->assertDatabaseHas('material_purchases', ['id' => $earlyPurchase->id]);
+            $this->assertSame(2.0, app(InventoryService::class)->getStockAsOf($project, $material, '2026-01-10'));
+            $this->assertSame(12.0, app(InventoryService::class)->getCurrentStock($project, $material));
+        }
+    }
+
     public function test_can_increase_purchase_quantity_and_keep_purchase_id(): void
     {
         [$project, $material] = $this->fixture();
@@ -64,26 +105,26 @@ class PurchaseInventorySafetyTest extends TestCase
         return [$project, $material];
     }
 
-    private function purchase(Project $project, Material $material, float $quantity)
+    private function purchase(Project $project, Material $material, float $quantity, string $date = '2026-05-01')
     {
-        return app(CreateMaterialPurchaseAction::class)->execute($this->purchasePayload($project, $material, $quantity));
+        return app(CreateMaterialPurchaseAction::class)->execute($this->purchasePayload($project, $material, $quantity, $date));
     }
 
-    private function writeOff(Project $project, Material $material, float $quantity): void
+    private function writeOff(Project $project, Material $material, float $quantity, string $date = '2026-05-02'): void
     {
         app(CreateMaterialWriteOffAction::class)->execute([
             'project_id' => $project->id,
             'material_id' => $material->id,
-            'date' => '2026-05-02',
+            'date' => $date,
             'quantity' => $quantity,
         ]);
     }
 
-    private function purchasePayload(Project $project, Material $material, float $quantity): array
+    private function purchasePayload(Project $project, Material $material, float $quantity, string $date = '2026-05-01'): array
     {
         return [
             'project_id' => $project->id,
-            'date' => '2026-05-01',
+            'date' => $date,
             'payment_status' => 'paid',
             'items' => [[
                 'material_id' => $material->id,

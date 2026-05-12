@@ -41,14 +41,25 @@ class UpdateMaterialPurchaseAction
                 }
             }
 
+            $oldMovementIds = InventoryMovement::where('source_type', MaterialPurchaseItem::class)
+                ->whereIn('source_id', $purchase->items->pluck('id'))
+                ->pluck('id')
+                ->all();
+
             foreach ($oldQuantities->keys()->merge($newQuantities->keys())->unique() as $materialId) {
                 $material = $project->materials()->findOrFail($materialId);
-                $projectedStock = $this->inventory->getCurrentStock($project, $material)
-                    - (float) ($oldQuantities[$materialId] ?? 0)
-                    + (float) ($newQuantities[$materialId] ?? 0);
+                $additionalMovements = collect($items)
+                    ->where('material_id', $materialId)
+                    ->map(fn (array $item) => [
+                        'date' => $data['date'],
+                        'type' => 'in',
+                        'quantity' => $item['quantity'],
+                    ])
+                    ->values()
+                    ->all();
 
-                if ($projectedStock < -0.0001) {
-                    throw new RuntimeException("Нельзя обновить покупку: по материалу «{$material->name}» остаток станет отрицательным.");
+                if ($this->inventory->hasNegativeStockInHistory($project, $material, $oldMovementIds, $additionalMovements)) {
+                    throw new RuntimeException("Нельзя обновить покупку: по материалу «{$material->name}» остаток станет отрицательным в истории операций.");
                 }
             }
 

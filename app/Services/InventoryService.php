@@ -31,6 +31,39 @@ class InventoryService
             ->value('stock');
     }
 
+    public function hasNegativeStockInHistory(Project $project, Material $material, array $excludedMovementIds = [], array $additionalMovements = []): bool
+    {
+        $dailyDeltas = [];
+
+        InventoryMovement::query()
+            ->whereBelongsTo($project)
+            ->whereBelongsTo($material)
+            ->when($excludedMovementIds, fn ($query) => $query->whereNotIn('id', $excludedMovementIds))
+            ->get(['date', 'type', 'quantity'])
+            ->each(function (InventoryMovement $movement) use (&$dailyDeltas): void {
+                $date = Carbon::parse($movement->date)->toDateString();
+                $dailyDeltas[$date] = ($dailyDeltas[$date] ?? 0) + $this->signedQuantity($movement->type, (float) $movement->quantity);
+            });
+
+        foreach ($additionalMovements as $movement) {
+            $date = Carbon::parse($movement['date'])->toDateString();
+            $dailyDeltas[$date] = ($dailyDeltas[$date] ?? 0) + $this->signedQuantity($movement['type'], (float) $movement['quantity']);
+        }
+
+        ksort($dailyDeltas);
+
+        $stock = 0.0;
+        foreach ($dailyDeltas as $delta) {
+            $stock += $delta;
+
+            if ($stock < -0.0001) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function getCurrentStockValue(Project $project, Material $material): float
     {
         return round($this->getCurrentStock($project, $material) * $this->getAverageUnitCost($project, $material), 2);
@@ -102,5 +135,15 @@ class InventoryService
                 return true;
             })
             ->values();
+    }
+
+    private function signedQuantity(string $type, float $quantity): float
+    {
+        return match ($type) {
+            'in' => $quantity,
+            'out' => -$quantity,
+            'adjustment' => $quantity,
+            default => 0.0,
+        };
     }
 }

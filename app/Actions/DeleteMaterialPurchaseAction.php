@@ -18,13 +18,16 @@ class DeleteMaterialPurchaseAction
         DB::transaction(function () use ($purchase): void {
             $purchase->loadMissing('items.material');
 
-            foreach ($purchase->items->groupBy('material_id') as $materialId => $items) {
-                $material = $items->first()->material;
-                $incomingQuantity = (float) $items->sum('quantity');
-                $projectedStock = $this->inventory->getCurrentStock($purchase->project, $material) - $incomingQuantity;
+            $oldMovementIds = InventoryMovement::where('source_type', MaterialPurchaseItem::class)
+                ->whereIn('source_id', $purchase->items->pluck('id'))
+                ->pluck('id')
+                ->all();
 
-                if ($projectedStock < -0.0001) {
-                    throw new RuntimeException("Нельзя удалить покупку: по материалу «{$material->name}» остаток станет отрицательным.");
+            foreach ($purchase->items->groupBy('material_id') as $items) {
+                $material = $items->first()->material;
+
+                if ($this->inventory->hasNegativeStockInHistory($purchase->project, $material, $oldMovementIds)) {
+                    throw new RuntimeException("Нельзя удалить покупку: по материалу «{$material->name}» остаток станет отрицательным в истории операций.");
                 }
             }
 
