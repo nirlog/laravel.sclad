@@ -32,16 +32,17 @@ class UpdateMaterialWriteOffAction
             $tagIds = $data['tag_ids'] ?? [];
             $this->assertTagsBelongToProject($project, $tagIds);
 
-            $available = $this->inventory->getCurrentStock($project, $material);
-            if ((int) $writeOff->material_id === (int) $material->id) {
+            $writeOffDate = Carbon::parse($data['date']);
+            $available = $this->inventory->getStockAsOf($project, $material, $writeOffDate);
+            if ((int) $writeOff->material_id === (int) $material->id && $writeOff->date?->lte($writeOffDate)) {
                 $available += (float) $writeOff->quantity;
             }
 
             if ($available + 0.0001 < (float) $data['quantity']) {
-                throw new RuntimeException('Недостаточно материала на складе для обновления списания.');
+                throw new RuntimeException('Недостаточно материала на складе для обновления списания на выбранную дату.');
             }
 
-            $unit = $this->inventory->getAverageUnitCost($project, $material, Carbon::parse($data['date']));
+            $unit = $this->inventory->getAverageUnitCost($project, $material, $writeOffDate);
             $total = round((float) $data['quantity'] * $unit, 2);
             unset($data['tag_ids']);
 

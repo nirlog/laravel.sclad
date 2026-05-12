@@ -13,9 +13,20 @@ class InventoryService
 {
     public function getCurrentStock(Project $project, Material $material): float
     {
-        return (float) InventoryMovement::query()
+        return $this->getStockAsOf($project, $material);
+    }
+
+    public function getStockAsOf(Project $project, Material $material, Carbon|string|null $date = null): float
+    {
+        $query = InventoryMovement::query()
             ->whereBelongsTo($project)
-            ->whereBelongsTo($material)
+            ->whereBelongsTo($material);
+
+        if ($date !== null) {
+            $query->whereDate('date', '<=', Carbon::parse($date));
+        }
+
+        return (float) $query
             ->selectRaw("COALESCE(SUM(CASE WHEN type='in' THEN quantity WHEN type='out' THEN -quantity WHEN type='adjustment' THEN quantity ELSE 0 END),0) as stock")
             ->value('stock');
     }
@@ -41,10 +52,10 @@ class InventoryService
         return (float) $row->qty > 0 ? round((float) $row->amount / (float) $row->qty, 2) : 0.0;
     }
 
-    public function assertCanWriteOff(Project $project, Material $material, float $quantity): void
+    public function assertCanWriteOff(Project $project, Material $material, float $quantity, Carbon|string|null $date = null): void
     {
-        if ($this->getCurrentStock($project, $material) + 0.0001 < $quantity) {
-            throw new RuntimeException('Недостаточно материала на складе для списания.');
+        if ($this->getStockAsOf($project, $material, $date) + 0.0001 < $quantity) {
+            throw new RuntimeException('Недостаточно материала на складе для списания на выбранную дату.');
         }
     }
 

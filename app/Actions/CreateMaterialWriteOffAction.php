@@ -31,9 +31,10 @@ class CreateMaterialWriteOffAction
 
             $tagIds = $data['tag_ids'] ?? [];
             $this->assertTagsBelongToProject($project, $tagIds);
-            $this->inventory->assertCanWriteOff($project, $material, (float) $data['quantity']);
+            $writeOffDate = Carbon::parse($data['date']);
+            $this->inventory->assertCanWriteOff($project, $material, (float) $data['quantity'], $writeOffDate);
 
-            $unit = $this->inventory->getAverageUnitCost($project, $material, Carbon::parse($data['date']));
+            $unit = $this->inventory->getAverageUnitCost($project, $material, $writeOffDate);
             $total = round((float) $data['quantity'] * $unit, 2);
             unset($data['tag_ids']);
             $data['project_id'] = $project->id;

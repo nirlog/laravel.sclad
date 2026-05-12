@@ -26,4 +26,6 @@ if [ "${RUN_SEEDERS:-false}" = "true" ]; then
     php artisan db:seed --force
 fi
 
+php artisan filament:assets --ansi
+
 exec "$@"

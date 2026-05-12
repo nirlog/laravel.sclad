@@ -16,10 +16,13 @@ class CostAnalyticsService
         $servicesTotal = (float) $this->serviceQuery($project, $filters)->sum('total_amount');
         $writtenOffTotal = (float) $this->writeOffQuery($project, $filters)->sum('total_amount');
         $inventoryValue = (float) app(InventoryService::class)->getInventoryTable($project)->sum('stock_value');
-        $currentMonth = now()->format('Y-m');
+        $currentMonthFilters = array_merge($filters, [
+            'date_from' => now()->startOfMonth()->toDateString(),
+            'date_to' => now()->endOfMonth()->toDateString(),
+        ]);
 
-        $currentMonthPurchases = $this->purchaseTotal($project, ['date_from' => now()->startOfMonth()->toDateString(), 'date_to' => now()->endOfMonth()->toDateString()] + $filters);
-        $currentMonthServices = $this->serviceQuery($project, [])->get()->filter(fn ($entry) => $entry->date?->format('Y-m') === $currentMonth)->sum('total_amount');
+        $currentMonthPurchases = $this->purchaseTotal($project, $currentMonthFilters);
+        $currentMonthServices = (float) $this->serviceQuery($project, $currentMonthFilters)->sum('total_amount');
 
         return [
             'actual_total' => $purchasesTotal + $servicesTotal,
