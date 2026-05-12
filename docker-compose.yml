@@ -5,19 +5,29 @@ services:
       dockerfile: Dockerfile
     volumes:
       - .:/var/www/html
+      - vendor:/var/www/html/vendor
     environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
       APP_URL: http://localhost:8080
+
       DB_CONNECTION: mysql
       DB_HOST: db
       DB_PORT: 3306
       DB_DATABASE: construction_ledger
       DB_USERNAME: construction
       DB_PASSWORD: secret
-      SESSION_DRIVER: database
-      CACHE_STORE: database
-      QUEUE_CONNECTION: database
+
+      SESSION_DRIVER: file
+      CACHE_STORE: file
+      QUEUE_CONNECTION: sync
+
+      COMPOSER_PROCESS_TIMEOUT: "0"
+      RUN_MIGRATIONS: "true"
+      RUN_SEEDERS: "true"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   nginx:
     image: nginx:1.27-alpine
@@ -40,15 +50,25 @@ services:
       - db-data:/var/lib/mysql
     ports:
       - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   node:
     image: node:22-alpine
     working_dir: /var/www/html
     volumes:
       - .:/var/www/html
+      - node_modules:/var/www/html/node_modules
     ports:
       - "5173:5173"
-    command: sh
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+    command: sh -lc "npm install && npm run dev -- --host 0.0.0.0"
 
 volumes:
   db-data:
+  vendor:
+  node_modules:

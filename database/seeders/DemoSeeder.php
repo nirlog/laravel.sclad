@@ -1,4 +1,104 @@
 <?php
+
 namespace Database\Seeders;
-use App\Actions\{CreateMaterialPurchaseAction,CreateMaterialWriteOffAction,CreateServiceEntryAction};use App\Models\{Contractor,Material,Project,Tag,Unit,User};use Illuminate\Database\Seeder;use Illuminate\Support\Facades\Hash;use Illuminate\Support\Str;
-class DemoSeeder extends Seeder{public function run(): void{$user=User::firstOrCreate(['email'=>'demo@example.com'],['name'=>'Демо владелец','password'=>Hash::make('password'),'is_admin'=>true]);$user->forceFill(['is_admin'=>true])->save();$project=Project::firstOrCreate(['user_id'=>$user->id,'name'=>'Дом'],['address'=>'Участок ИЖС','status'=>'active','started_at'=>now()->startOfYear()]);$units=Unit::pluck('id','short_name');$materials=[['Цемент М500','мешок'],['Песок','м³'],['Щебень','м³'],['Арматура 12 мм','т'],['Газобетон D500','м³'],['Доска 50x150','м³']];foreach($materials as [$name,$unit]){Material::firstOrCreate(['project_id'=>$project->id,'name'=>$name],['unit_id'=>$units[$unit],'is_active'=>true]);}$tags=collect(['фундамент','стены','кровля','доставка','аренда техники'])->map(fn($n)=>Tag::firstOrCreate(['project_id'=>$project->id,'slug'=>Str::slug($n)],['name'=>$n,'color'=>'#2563eb']));$contractor=Contractor::firstOrCreate(['project_id'=>$project->id,'name'=>'Бригада Иванова'],['phone'=>'+7 900 000-00-00']);$cement=Material::where('project_id',$project->id)->where('name','Цемент М500')->first();$sand=Material::where('project_id',$project->id)->where('name','Песок')->first();app(CreateMaterialPurchaseAction::class)->execute(['project_id'=>$project->id,'date'=>now()->subDays(20),'supplier_name'=>'СтройМаркет','payment_status'=>'paid','comment'=>'Материалы для фундамента','tag_ids'=>[$tags[0]->id],'items'=>[['material_id'=>$cement->id,'quantity'=>100,'unit_price'=>420],['material_id'=>$sand->id,'quantity'=>12,'unit_price'=>1600]]]);app(CreateMaterialWriteOffAction::class)->execute(['project_id'=>$project->id,'material_id'=>$cement->id,'date'=>now()->subDays(10),'quantity'=>45,'comment'=>'Заливка ленты','tag_ids'=>[$tags[0]->id]]);app(CreateServiceEntryAction::class)->execute(['project_id'=>$project->id,'contractor_id'=>$contractor->id,'date'=>now()->subDays(9),'name'=>'Бетонные работы','pricing_type'=>'fixed','total_amount'=>85000,'payment_status'=>'paid','tag_ids'=>[$tags[0]->id]]);}}
+
+use App\Actions\CreateMaterialPurchaseAction;
+use App\Actions\CreateMaterialWriteOffAction;
+use App\Actions\CreateServiceEntryAction;
+use App\Models\Contractor;
+use App\Models\Material;
+use App\Models\Project;
+use App\Models\Tag;
+use App\Models\Unit;
+use App\Models\User;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+
+class DemoSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $user = User::updateOrCreate(
+            ['email' => 'demo@example.com'],
+            [
+                'name' => 'Демо владелец',
+                'password' => Hash::make('password'),
+                'is_admin' => true,
+            ],
+        );
+
+        $project = Project::updateOrCreate(
+            ['user_id' => $user->id, 'name' => 'Дом'],
+            ['address' => 'Участок ИЖС', 'status' => 'active', 'started_at' => now()->startOfYear()],
+        );
+
+        $units = Unit::pluck('id', 'short_name');
+        $materials = [
+            ['Цемент М500', 'мешок'],
+            ['Песок', 'м³'],
+            ['Щебень', 'м³'],
+            ['Арматура 12 мм', 'т'],
+            ['Газобетон D500', 'м³'],
+            ['Доска 50x150', 'м³'],
+        ];
+
+        foreach ($materials as [$name, $unit]) {
+            Material::firstOrCreate(
+                ['project_id' => $project->id, 'name' => $name],
+                ['unit_id' => $units[$unit], 'is_active' => true],
+            );
+        }
+
+        $tags = collect(['фундамент', 'стены', 'кровля', 'доставка', 'аренда техники'])
+            ->map(fn ($name) => Tag::firstOrCreate(
+                ['project_id' => $project->id, 'slug' => Str::slug($name)],
+                ['name' => $name, 'color' => '#2563eb'],
+            ));
+
+        $contractor = Contractor::firstOrCreate(
+            ['project_id' => $project->id, 'name' => 'Бригада Иванова'],
+            ['phone' => '+7 900 000-00-00'],
+        );
+
+        if ($project->materialPurchases()->exists()) {
+            return;
+        }
+
+        $cement = Material::where('project_id', $project->id)->where('name', 'Цемент М500')->firstOrFail();
+        $sand = Material::where('project_id', $project->id)->where('name', 'Песок')->firstOrFail();
+
+        app(CreateMaterialPurchaseAction::class)->execute([
+            'project_id' => $project->id,
+            'date' => now()->subDays(20),
+            'supplier_name' => 'СтройМаркет',
+            'payment_status' => 'paid',
+            'comment' => 'Материалы для фундамента',
+            'tag_ids' => [$tags[0]->id],
+            'items' => [
+                ['material_id' => $cement->id, 'quantity' => 100, 'unit_price' => 420],
+                ['material_id' => $sand->id, 'quantity' => 12, 'unit_price' => 1600],
+            ],
+        ]);
+
+        app(CreateMaterialWriteOffAction::class)->execute([
+            'project_id' => $project->id,
+            'material_id' => $cement->id,
+            'date' => now()->subDays(10),
+            'quantity' => 45,
+            'comment' => 'Заливка ленты',
+            'tag_ids' => [$tags[0]->id],
+        ]);
+
+        app(CreateServiceEntryAction::class)->execute([
+            'project_id' => $project->id,
+            'contractor_id' => $contractor->id,
+            'date' => now()->subDays(9),
+            'name' => 'Бетонные работы',
+            'pricing_type' => 'fixed',
+            'total_amount' => 85000,
+            'payment_status' => 'paid',
+            'tag_ids' => [$tags[0]->id],
+        ]);
+    }
+}

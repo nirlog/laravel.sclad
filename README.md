@@ -33,30 +33,54 @@ php artisan serve
 
 ## Запуск через Docker
 
-Docker-конфигурация — альтернативный способ локального запуска на Windows, Linux и macOS. SQLite quickstart выше остаётся доступным для запуска без контейнеров.
-
 ```bash
+git clone https://github.com/nirlog/laravel.sclad.git
+cd laravel.sclad
+
 cp .env.example .env
+
+docker compose down -v
 docker compose up -d --build
-docker compose exec app php artisan key:generate
-docker compose exec app php artisan migrate:fresh --seed
-docker compose run --rm node npm install
-docker compose run --rm node npm run build
+docker compose logs -f app
 ```
 
-Для Vite dev server можно использовать:
+Адреса:
+
+* приложение: [http://localhost:8080](http://localhost:8080)
+* пользовательская часть: [http://localhost:8080/app](http://localhost:8080/app)
+* login: [http://localhost:8080/login](http://localhost:8080/login)
+* admin: [http://localhost:8080/admin](http://localhost:8080/admin)
+* Vite: [http://localhost:5173](http://localhost:5173)
+
+Демо-доступ:
+
+* email: [demo@example.com](mailto:demo@example.com)
+* password: password
+
+Docker Compose автоматически устанавливает Composer-зависимости в volume `vendor`, npm-зависимости в volume `node_modules`, генерирует `APP_KEY`, выполняет миграции и запускает seeders. Повторный запуск `docker compose up -d --build` идемпотентен и не требует ручного `composer install`, `php artisan key:generate`, `php artisan migrate` или `npm install`.
+
+### Windows / CRLF
+
+Если app падает с ошибкой:
+
+```text
+env: 'sh\r': No such file or directory
+```
+
+выполните:
 
 ```bash
-docker compose run --rm --service-ports node npm run dev
+dos2unix docker/entrypoint.sh
+docker compose down
+docker compose up -d --build
 ```
 
-Адреса после запуска:
+### Полный сброс Docker-окружения
 
-- приложение: <http://localhost:8080>
-- admin: <http://localhost:8080/admin>
-- demo login: `demo@example.com` / `password`
-
-По умолчанию compose передаёт контейнеру Laravel MySQL-настройки `DB_HOST=db`, `DB_DATABASE=construction_ledger`, `DB_USERNAME=construction`, `DB_PASSWORD=secret`, а также `SESSION_DRIVER=database`, `CACHE_STORE=database` и `QUEUE_CONNECTION=database`. Автоматические миграции в entrypoint отключены; если нужно запускать их при старте app-контейнера, задайте `RUN_MIGRATIONS=true`.
+```bash
+docker compose down -v
+docker compose up -d --build
+```
 
 ## Проверки
 
